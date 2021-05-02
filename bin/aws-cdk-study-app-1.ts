@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from '@aws-cdk/core';
-import { AwsCdkStudyApp1Stack } from '../lib/aws-cdk-study-app-1-stack';
+import { AwsCdkStudyAppStack } from '../lib/aws-cdk-study-app-stack';
+import {AwsCdkStudyAppDnsStack} from "../lib/aws-cdk-study-app-dns-stack";
 
 const app = new cdk.App();
+const domainNameApex = 'raccoon-lab.com'
 
-new AwsCdkStudyApp1Stack(app, 'AwsCdkStudyApp1Stack-dev', {
+const { hostedZone, certificate } = new AwsCdkStudyAppDnsStack(app, 'AwsCdkStudyAppDnsStack', {
+    dnsName: domainNameApex,
     env: {
-        region: 'us-east-2',
-    },
-    envName: 'dev'
+        region: 'us-east-1'
+    }
 });
-new AwsCdkStudyApp1Stack(app, 'AwsCdkStudyApp1Stack-prod', {
+
+new AwsCdkStudyAppStack(app, 'AwsCdkStudyAppStack', {
+    hostedZone,
+    certificate,
+    dnsName: domainNameApex,
     env: {
-        region: 'us-west-1'
-    },
-    envName: 'prod'
+        region: 'us-east-1'
+    }
 });

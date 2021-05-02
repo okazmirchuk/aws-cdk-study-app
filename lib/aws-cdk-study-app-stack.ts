@@ -7,27 +7,26 @@ import {BucketDeployment, Source} from "@aws-cdk/aws-s3-deployment";
 import {PolicyStatement} from "@aws-cdk/aws-iam";
 import {CorsHttpMethod, HttpApi, HttpMethod} from "@aws-cdk/aws-apigatewayv2";
 import {LambdaProxyIntegration} from "@aws-cdk/aws-apigatewayv2-integrations";
-import {CloudFrontWebDistribution} from "@aws-cdk/aws-cloudfront";
+import {Distribution} from "@aws-cdk/aws-cloudfront";
+import {ARecord, IPublicHostedZone, RecordTarget} from "@aws-cdk/aws-route53";
+import {ICertificate} from "@aws-cdk/aws-certificatemanager";
+import {S3Origin} from "@aws-cdk/aws-cloudfront-origins";
+import {CloudFrontTarget} from "@aws-cdk/aws-route53-targets";
+import {S3BucketWithDeploy} from "./s3-bucket-with-deploy";
 
 interface AppStackProps extends cdk.StackProps {
-    envName: string
+    hostedZone: IPublicHostedZone;
+    certificate: ICertificate;
+    dnsName: string
 }
 
-export class AwsCdkStudyApp1Stack extends cdk.Stack {
-    constructor(scope: cdk.Construct, id: string, props?: AppStackProps) {
+export class AwsCdkStudyAppStack extends cdk.Stack {
+    constructor(scope: cdk.Construct, id: string, props: AppStackProps) {
         super(scope, id, props);
 
-        const bucket = new Bucket(this, 'AwsCdkStudyAppBucket', {
-            encryption: props?.envName === 'prod' ? BucketEncryption.S3_MANAGED : BucketEncryption.UNENCRYPTED
+        const { bucket } = new S3BucketWithDeploy(this, 'AwsCdkStudyAppBucket', {
+            deployTo: ['..', 'photos']
         })
-
-        new BucketDeployment(this, 'AwsCdkStudyAppPhotos', {
-            sources: [
-                Source.asset(join(__dirname, '..', 'photos'))
-            ],
-            destinationBucket: bucket
-        })
-
         const websiteBucket = new Bucket(this, 'AwsCdkSimpleWebsite', {
             websiteIndexDocument: 'index.html',
             publicReadAccess: true,
@@ -76,15 +75,15 @@ export class AwsCdkStudyApp1Stack extends cdk.Stack {
             integration: lambdaIntegration
         });
 
-        const cloudFront = new CloudFrontWebDistribution(this, 'StudyAppDistribution', {
-            originConfigs: [
-                {
-                    s3OriginSource: {
-                        s3BucketSource: websiteBucket
-                    },
-                    behaviors: [{isDefaultBehavior: true}]
-                }
-            ]
+        const cloudFront = new Distribution(this, 'StudyAppDistribution', {
+            defaultBehavior: {origin: new S3Origin(websiteBucket)},
+            domainNames: [props.dnsName],
+            certificate: props.certificate,
+        })
+
+        new ARecord(this, 'AwsCdkStudyAppApex', {
+            zone: props.hostedZone,
+            target: RecordTarget.fromAlias(new CloudFrontTarget(cloudFront))
         })
 
         new BucketDeployment(this, 'AwsCdkSimpleWebsiteDeploy', {
@@ -95,22 +94,22 @@ export class AwsCdkStudyApp1Stack extends cdk.Stack {
 
         new cdk.CfnOutput(this, 'AwsCdkStudyAppBucketExport', {
             value: bucket.bucketName,
-            exportName: `AwsCdkStudyAppBucketName-${props?.envName}`,
+            exportName: `AwsCdkStudyAppBucketName`,
         })
 
         new cdk.CfnOutput(this, 'AwsCdkStudyAppWebsiteBucketExport', {
             value: websiteBucket.bucketName,
-            exportName: `AwsCdkStudyAppWebsiteBucketName-${props?.envName}`,
+            exportName: `AwsCdkStudyAppWebsiteBucketName`,
         })
 
         new cdk.CfnOutput(this, 'AwsCdkStudyAppWebsiteUrl', {
             value: cloudFront.distributionDomainName,
-            exportName: `AwsCdkStudyAppWebsiteUrl-${props?.envName}`,
+            exportName: `AwsCdkStudyAppWebsiteUrl`,
         })
 
         new cdk.CfnOutput(this, 'CdkStudyApi', {
             value: httpApi.url!,
-            exportName: `CdkStudyAppApiEndpoint-${props?.envName}`,
+            exportName: `CdkStudyAppApiEndpoint`,
         })
     }
 }
